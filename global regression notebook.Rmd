@@ -1,0 +1,1136 @@
+---
+title: "Global Regression"
+output: html_notebook
+---
+
+
+Global Regression
+
+Part 1. 
+This part involves creating a lag embedded matrix across the time series from 1 - 600, and using the last h observations in each time series as a testing set. In order to achieve the best possible MAE, I use a different model for each type of frequency data, so that each model is trained on similar data to that of which it will be predicting. I start off using a default lag for each frequency global model. e.g 24 for hourly frequency time series to capture daily trends, 12 for monthly frequency data to capture yearly trends etc. These can be adjusted later when I run a variety of lags and see which is the best for each type of frequency model. 
+
+
+
+```{r}
+name<- paste("C:/Users/buckl/Desktop/trinity/Forecasting/train/frequency.csv")
+frequency <- read.csv(name)
+ts_freq = as.list(frequency$x)
+
+
+
+name<- paste("C:/Users/buckl/Desktop/trinity/Forecasting/train/ahead.csv")
+ahead = read.csv(name)
+forecast_steps = as.list(ahead$x)
+
+get_ts_frequency<- function(freq){
+  Freq_string = c("Daily", "Hourly", "Monthly", "Quarterly", "Weekly", "Yearly")
+  Freq_number = c(365.25, 365.25*24, 12, 4, 52, 1)
+  ind  = which(freq == Freq_string)
+  return(Freq_number[ind])
+}
+
+lag_daily = 365
+lag_hourly = 24
+lag_monthly = 12
+lag_quarterly = 4
+lag_weekly = 52
+lag_yearly = 1
+
+
+
+
+X_daily = matrix(ncol = lag_daily+1)
+X_hourly = matrix(ncol = lag_hourly+1)
+X_monthly = matrix(ncol = lag_monthly+1)
+X_quarterly = matrix(ncol = lag_quarterly+1)
+X_weekly = matrix(ncol = lag_weekly+1)
+X_yearly = matrix(ncol = lag_yearly+1)
+
+X_daily = X_daily[-1,]
+X_hourly = X_hourly[-1,]
+X_monthly = X_monthly[-1,]
+X_quarterly = X_quarterly[-1,]
+X_weekly = X_weekly[-1,]
+X_yearly = X_yearly[-1,]
+  
+  # Training phase
+for (i in 1:600) {
+    name <- paste("C:/Users/buckl/Desktop/trinity/Forecasting/train/train_", i, sep="")
+    name <- paste(name, ".csv", sep="")
+    y <- as.matrix(read.csv(name))
+    
+    freq_char = ts_freq[i]
+    freq = get_ts_frequency(freq_char)
+    
+    
+    h <- forecast_steps[[i]]
+    
+    
+    lag <- NULL
+    
+    
+    
+    if (freq_char == "Daily"){
+      lag <- lag_daily
+    }
+    if (freq_char == "Hourly"){
+      lag <- lag_hourly
+    }
+    if (freq_char == "Weekly"){
+      lag <-lag_weekly
+    }
+    if (freq_char == "Monthly"){
+      lag <- lag_monthly
+    }
+    if (freq_char == "Quarterly"){
+      lag <- lag_quarterly
+    }
+    if (freq_char == "Yearly"){
+      lag <- lag_yearly
+      
+    }
+    
+    
+    
+    
+    
+    trainData <- ts(data = y[1:(length(y) - h)], frequency = freq)
+    
+    
+    
+    if(length(y)<(h+lag+1)){
+      next
+    }
+    
+    
+    
+    if (freq_char == "Daily"){
+      X_daily <- rbind(X_daily, do.call("rbind", lapply(list(trainData), function(x) embed(x, lag_daily + 1))))
+      
+    }
+    if (freq_char == "Hourly"){
+      X_hourly <- rbind(X_hourly, do.call("rbind", lapply(list(trainData), function(x) embed(x, lag_hourly + 1))))
+      
+      
+    }
+    if (freq_char == "Weekly"){
+      X_weekly <- rbind(X_weekly, do.call("rbind", lapply(list(trainData), function(x) embed(x, lag_weekly + 1))))
+      
+    }
+    if (freq_char == "Monthly"){
+      X_monthly <- rbind(X_monthly, do.call("rbind", lapply(list(trainData), function(x) embed(x, lag_monthly + 1))))
+      
+    }
+    if (freq_char == "Quarterly"){
+      X_quarterly <- rbind(X_quarterly, do.call("rbind", lapply(list(trainData), function(x) embed(x, lag_quarterly + 1))))
+      
+    }
+    if (freq_char == "Yearly"){
+      
+      X_yearly <- rbind(X_yearly, do.call("rbind", lapply(list(trainData), function(x) embed(x, lag_yearly + 1))))
+      
+      
+    }
+    
+    
+}
+  
+
+
+
+# Daily
+Y_daily <- X_daily[, 1]
+X_daily <- X_daily[, -1]
+globalModel_daily <- lm(Y_daily ~ X_daily - 1)
+
+# Hourly
+Y_hourly <- X_hourly[, 1]
+X_hourly <- X_hourly[, -1]
+globalModel_hourly <- lm(Y_hourly ~ X_hourly - 1)
+
+# Monthly
+Y_monthly <- X_monthly[, 1]
+X_monthly <- X_monthly[, -1]
+globalModel_monthly <- lm(Y_monthly ~ X_monthly - 1)
+
+# Quarterly
+Y_quarterly <- X_quarterly[, 1]
+X_quarterly <- X_quarterly[, -1]
+globalModel_quarterly <- lm(Y_quarterly ~ X_quarterly - 1)
+
+# Weekly
+Y_weekly <- X_weekly[, 1]
+X_weekly <- X_weekly[, -1]
+globalModel_weekly <- lm(Y_weekly ~ X_weekly - 1)
+
+# Yearly
+Y_yearly <- X_yearly[, 1]
+X_yearly <- X_yearly[, -1]
+globalModel_yearly <- lm(Y_yearly ~ X_yearly - 1)
+
+  
+# Testing phase
+MAEs <- c()
+
+for (i in 1:600) {
+    
+    name <- paste("C:/Users/buckl/Desktop/trinity/Forecasting/train/train_", i, sep="")
+    name <- paste(name, ".csv", sep="")
+    y <- as.matrix(read.csv(name))
+    
+    freq_char = ts_freq[i]
+    
+    
+    h <- forecast_steps[[i]]
+    
+    
+    lag <- NULL
+    
+    
+    
+    if (freq_char == "Daily"){
+      lag <- lag_daily
+    }
+    if (freq_char == "Hourly"){
+      lag <- lag_hourly
+    }
+    if (freq_char == "Weekly"){
+      lag <-lag_weekly
+    }
+    if (freq_char == "Monthly"){
+      lag <- lag_monthly
+    }
+    if (freq_char == "Quarterly"){
+      lag <- lag_quarterly
+    }
+    if (freq_char == "Yearly"){
+      lag <- lag_yearly
+      
+    }
+    
+    
+    if(length(y)<(h+lag+1)){
+      next
+    }
+    
+    trainData <- ts(data = y[1:(length(y) - h)], frequency = 12)
+    testData <- as.matrix(y[(length(y) - (h-1)):length(y)])
+    
+    oldData <- rev(trainData[(length(trainData) - (lag - 1)) : length(trainData)])
+    
+    
+    
+    model <- NULL
+    
+    
+    
+    if (freq_char == "Daily"){
+      model <- globalModel_daily
+    }
+    if (freq_char == "Hourly"){
+      model <- globalModel_hourly
+    }
+    if (freq_char == "Weekly"){
+      model <-globalModel_weekly
+    }
+    if (freq_char == "Monthly"){
+      model <- globalModel_monthly
+    }
+    if (freq_char == "Quarterly"){
+      model <- globalModel_quarterly
+    }
+    if (freq_char == "Yearly"){
+      model <- globalModel_yearly
+      
+    }
+    
+    
+    
+    forecastedValues <- c()
+    for (k in 1:h) {
+      forecastedValue <- oldData %*% model$coefficients
+      #forecastedValue <- sum(oldData * globalModel$coefficients)
+      forecastedValues[k] <- forecastedValue
+      oldData <- c(forecastedValue, oldData[-lag])
+    }
+    
+    forecastedValues <- as.matrix(forecastedValues)
+    
+    
+    
+    AE <- abs(forecastedValues - testData)
+    
+    
+    MAEs[i] <- mean(AE)
+    
+    
+    
+}
+
+MAEs <- na.omit(MAEs)
+
+
+print(paste("Mean Absolute Error",mean(MAEs)))
+```
+
+
+
+
+Part 2.
+This part uses all the data from the 600 time series to make predictions about the next h steps ahead for each time series, and is assessed on its accuracy by kaggle. I start off with a default lag of 12 for each type of time series data.
+
+
+```{r}
+name<- paste("C:/Users/buckl/Desktop/trinity/Forecasting/train/ahead.csv")
+ahead = read.csv(name)
+forecast_steps = as.list(ahead$x)
+all_forecast_values <- list()
+
+
+name<- paste("C:/Users/buckl/Desktop/trinity/Forecasting/train/frequency.csv")
+frequency <- read.csv(name)
+ts_freq = as.list(frequency$x)
+
+
+
+
+
+
+get_ts_frequency<- function(freq){
+  Freq_string = c("Daily", "Hourly", "Monthly", "Quarterly", "Weekly", "Yearly")
+  Freq_number = c(365.25, 365.25*24, 12, 4, 52, 1)
+  ind  = which(freq == Freq_string)
+  return(Freq_number[ind])
+}
+lag_daily = 12
+lag_hourly = 12
+lag_monthly = 12
+lag_quarterly = 12
+lag_weekly = 12
+lag_yearly = 12
+
+X_daily = matrix(ncol = lag_daily+1)
+X_hourly = matrix(ncol = lag_hourly+1)
+X_monthly = matrix(ncol = lag_monthly+1)
+X_quarterly = matrix(ncol = lag_quarterly+1)
+X_weekly = matrix(ncol = lag_weekly+1)
+X_yearly = matrix(ncol = lag_yearly+1)
+
+X_daily = X_daily[-1,]
+X_hourly = X_hourly[-1,]
+X_monthly = X_monthly[-1,]
+X_quarterly = X_quarterly[-1,]
+X_weekly = X_weekly[-1,]
+X_yearly = X_yearly[-1,]
+
+
+
+min_length_daily <- Inf
+min_length_hourly <- Inf
+min_length_weekly <- Inf
+min_length_monthly <- Inf
+min_length_quarterly <- Inf
+min_length_yearly <- Inf
+
+
+
+for (i in 1:600) { 
+  name <- paste("train_", i, sep = "")
+  name <- paste("C:/Users/buckl/Desktop/trinity/Forecasting/train/", name, ".csv", sep = "")
+  y <- as.matrix(read.csv(name))
+  
+  freq_char = ts_freq[i]
+  freq = get_ts_frequency(freq_char)
+  
+  
+  data <- ts(data = y, frequency = freq) 
+  
+  # Corrected line to choose the right X matrix based on frequency
+  
+  min_length <- length(data)
+  
+
+  
+  if (freq_char == "Daily"){
+    X_daily <- rbind(X_daily, do.call("rbind", lapply(list(data), function(x) embed(x, lag_daily + 1))))
+    min_length_daily <- min(min_length, min_length_daily)
+  }
+  if (freq_char == "Hourly"){
+    X_hourly <- rbind(X_hourly, do.call("rbind", lapply(list(data), function(x) embed(x, lag_hourly + 1))))
+    min_length_hourly <- min(min_length, min_length_hourly)
+    
+  }
+  if (freq_char == "Weekly"){
+    X_weekly <- rbind(X_weekly, do.call("rbind", lapply(list(data), function(x) embed(x, lag_weekly + 1))))
+    min_length_weekly <- min(min_length, min_length_weekly)
+  }
+  if (freq_char == "Monthly"){
+    X_monthly <- rbind(X_monthly, do.call("rbind", lapply(list(data), function(x) embed(x, lag_monthly + 1))))
+    min_length_monthly <- min(min_length, min_length_monthly)
+  }
+  if (freq_char == "Quarterly"){
+    X_quarterly <- rbind(X_quarterly, do.call("rbind", lapply(list(data), function(x) embed(x, lag_quarterly + 1))))
+    min_length_quarterly <- min(min_length, min_length_quarterly)
+  }
+  if (freq_char == "Yearly"){
+    X_yearly <- rbind(X_yearly, do.call("rbind", lapply(list(data), function(x) embed(x, lag_yearly + 1))))
+    min_length_yearly <- min(min_length, min_length_yearly)
+    
+  }
+  
+  
+  
+  
+
+  
+ 
+}
+
+
+
+
+# Daily
+Y_daily <- X_daily[, 1]
+X_daily <- X_daily[, -1]
+globalModel_daily <- lm(Y_daily ~ X_daily - 1)
+
+# Hourly
+Y_hourly <- X_hourly[, 1]
+X_hourly <- X_hourly[, -1]
+globalModel_hourly <- lm(Y_hourly ~ X_hourly - 1)
+
+# Monthly
+Y_monthly <- X_monthly[, 1]
+X_monthly <- X_monthly[, -1]
+globalModel_monthly <- lm(Y_monthly ~ X_monthly - 1)
+
+# Quarterly
+Y_quarterly <- X_quarterly[, 1]
+X_quarterly <- X_quarterly[, -1]
+globalModel_quarterly <- lm(Y_quarterly ~ X_quarterly - 1)
+
+# Weekly
+Y_weekly <- X_weekly[, 1]
+X_weekly <- X_weekly[, -1]
+globalModel_weekly <- lm(Y_weekly ~ X_weekly - 1)
+
+# Yearly
+Y_yearly <- X_yearly[, 1]
+X_yearly <- X_yearly[, -1]
+globalModel_yearly <- lm(Y_yearly ~ X_yearly - 1)
+
+# Now you have separate linear models for each frequency:
+# globalModel_daily, globalModel_hourly, globalModel_monthly, etc.
+
+
+
+
+
+
+
+
+
+maes <- c()
+
+h = 14 #Size we want to forecast for
+index <- 1:h
+name <- paste("train_",1,sep="")
+name<- paste("C:/Users/buckl/Desktop/trinity/Forecasting/train/",name,".csv",sep="")
+y<- as.matrix(read.csv(name))
+#Read in ith training data
+data <- ts(data = y, frequency = 365.25) 
+#Store in a time series
+oldData <- rev(data[(length(data) - (lag_yearly-1)) :length(data)])
+#Take last 12 values to forecast the next one, note order is reversed so most recent values are first
+forecastedValues <- c()
+#Make a vector to store forecasted values in
+for(i in 1:h){ #Loop 18 times to forecast 18 new values
+  forecastedValue <- oldData%*%globalModel_yearly$coefficients
+  #Calculate the next value by multiplying the last 12 data points by the model coefficients
+  forecastedValues[i] <- forecastedValue
+  oldData <- c(forecastedValue,oldData[-lag_yearly])
+  #Place newest data at the start and drop the oldest piece of data
+  
+}
+forecastedValues <- as.matrix(forecastedValues)
+#Make forecasted values a matrix
+output <- as.matrix(cbind(as.integer(index),forecastedValues))
+#Create an output matrix and bind the index and forecasted values
+colnames(output) <- c("Id","Predicted")
+#Name the columns
+
+for (i in 2:600){ #For the rest of the data
+  name <- paste("train_",i,sep="")
+  name<- paste("C:/Users/buckl/Desktop/trinity/Forecasting/train/",name,".csv",sep="")
+  y<- as.matrix(read.csv(name))
+  #Read in ith training data
+  
+  freq_char <- ts_freq[i]
+  freq <- get_ts_frequency(freq_char)
+  data <- ts(data = y, frequency = freq)
+  #Store in a time series
+  
+  lag <- NULL
+  
+  
+  if (freq_char == "Daily"){
+    lag <- lag_daily
+  }
+  if (freq_char == "Hourly"){
+    lag <- lag_hourly
+  }
+  if (freq_char == "Weekly"){
+    lag <-lag_weekly
+  }
+  if (freq_char == "Monthly"){
+    lag <- lag_monthly
+  }
+  if (freq_char == "Quarterly"){
+    lag <- lag_quarterly
+  }
+  if (freq_char == "Yearly"){
+    lag <- lag_yearly
+    
+  }
+  
+  
+  
+  oldData <- rev(data[(length(data) - (lag-1)) :length(data)])
+  
+  
+  
+  #Take last 12 values to forecast the next one, note order is reversed so most recent values are first
+  forecastedValues <- c()
+  #Make a vector to store forecasted values in
+  
+  h <- forecast_steps[[i]]
+  index <- 1:h
+  
+  model <- NULL
+  
+  if (freq_char == "Daily"){
+    model <- globalModel_daily
+  }
+  if (freq_char == "Hourly"){
+    model <- globalModel_hourly
+  }
+  if (freq_char == "Weekly"){
+    model <-globalModel_weekly
+  }
+  if (freq_char == "Monthly"){
+    model <- globalModel_monthly
+  }
+  if (freq_char == "Quarterly"){
+    model <- globalModel_quarterly
+  }
+  if (freq_char == "Yearly"){
+    model <- globalModel_yearly
+    
+  }
+  
+
+  
+  for(i in 1:h){ #Loop 18 times to forecast 18 new values
+    
+   
+    forecastedValue <- oldData%*%model$coefficients 
+    #Calculate the next value by multiplying the last 12 data points by the model coefficients
+    forecastedValues[i] <- forecastedValue
+    oldData <- c(forecastedValue,oldData[-lag]) 
+    #Place newest data at the start and drop the oldest piece of data
+    
+  }
+  forecastedValues <- as.matrix(forecastedValues)
+  #Make forecasted values a matrix
+  
+  
+  output<-rbind(output,cbind(as.integer(nrow(output)+index),forecastedValues))
+  #Bind to the output matrix
+}
+write.table(output, file ="C:/Users/buckl/Desktop/trinity/Forecasting/global_regression.csv", 
+            sep=",",
+            row.names=FALSE)
+
+```
+
+With a default lag of 12 for each type of time series data, the mean average error returned from kaggle is 587. We can improve this for the global regression models where in the next step we test out different lags, and find one most suited for each frequency global model.
+
+
+
+
+Part 3.
+I will now predict the last h time series observations for the 600 time series and calculate the MAE over a range of different lag values. This will allow me to find a good lag to use for each of the global models, and I can then use these lag values to predict the next h steps ahead in the time series data which should result in a better MAE from kaggle.
+
+```{r}
+
+maes_for_lags_daily <- c()
+maes_for_lags_weekly <- c()
+maes_for_lags_hourly <- c()
+maes_for_lags_monthly <- c()
+maes_for_lags_quaterly <- c()
+maes_for_lags_yearly <- c()
+
+
+maes_daily<-c()
+maes_hourly<-c()
+maes_monthly<-c()
+maes_quaterly<-c()
+maes_weekly<-c()
+maes_yearly<-c()
+
+
+index_daily <- 1
+index_hourly <- 1
+index_monthly <- 1
+index_quarterly <- 1
+index_weekly <- 1
+index_yearly <- 1
+
+
+
+
+
+name<- paste("C:/Users/buckl/Desktop/trinity/Forecasting/train/frequency.csv")
+frequency <- read.csv(name)
+ts_freq = as.list(frequency$x)
+
+
+
+name<- paste("C:/Users/buckl/Desktop/trinity/Forecasting/train/ahead.csv")
+ahead = read.csv(name)
+forecast_steps = as.list(ahead$x)
+
+
+
+get_ts_frequency<- function(freq){
+  Freq_string = c("Daily", "Hourly", "Monthly", "Quarterly", "Weekly", "Yearly")
+  Freq_number = c(365.25, 365.25*24, 12, 4, 52, 1)
+  ind  = which(freq == Freq_string)
+  return(Freq_number[ind])
+}
+lag_daily = 1
+lag_hourly = 1
+lag_monthly = 1
+lag_quarterly = 1
+lag_weekly = 1
+lag_yearly = 1
+
+max_lag_daily = 197
+max_lag_hourly = 682
+max_lag_monthly = 42
+max_lag_quarterly = 21
+max_lag_weekly = 1026
+max_lag_yearly = 8
+
+
+
+
+for (x in 1:100){
+
+if (lag_yearly<8){
+  lag_yearly <- lag_yearly+1
+}
+if(lag_daily<197){
+  lag_daily <- lag_daily +1
+}
+if(lag_hourly<682){
+  lag_hourly<-lag_hourly+1
+}
+if(lag_weekly<1026){
+  lag_weekly <- lag_weekly+1
+}
+if(lag_monthly<42){
+  lag_monthly <- lag_monthly+1
+}
+if(lag_quarterly<17){
+  lag_quarterly <- lag_quarterly+1
+}
+
+X_daily = matrix(ncol = lag_daily+1)
+X_hourly = matrix(ncol = lag_hourly+1)
+X_monthly = matrix(ncol = lag_monthly+1)
+X_quarterly = matrix(ncol = lag_quarterly+1)
+X_weekly = matrix(ncol = lag_weekly+1)
+X_yearly = matrix(ncol = lag_yearly+1)
+
+X_daily = X_daily[-1,]
+X_hourly = X_hourly[-1,]
+X_monthly = X_monthly[-1,]
+X_quarterly = X_quarterly[-1,]
+X_weekly = X_weekly[-1,]
+X_yearly = X_yearly[-1,]
+  
+  # Training phase
+for (i in 1:600) {
+    name <- paste("C:/Users/buckl/Desktop/trinity/Forecasting/train/train_", i, sep="")
+    name <- paste(name, ".csv", sep="")
+    y <- as.matrix(read.csv(name))
+    
+    freq_char = ts_freq[i]
+    freq = get_ts_frequency(freq_char)
+    
+    
+    h <- forecast_steps[[i]]
+    
+    
+    lag <- NULL
+    
+    
+    
+    if (freq_char == "Daily"){
+      lag <- lag_daily
+    }
+    if (freq_char == "Hourly"){
+      lag <- lag_hourly
+    }
+    if (freq_char == "Weekly"){
+      lag <-lag_weekly
+    }
+    if (freq_char == "Monthly"){
+      lag <- lag_monthly
+    }
+    if (freq_char == "Quarterly"){
+      lag <- lag_quarterly
+    }
+    if (freq_char == "Yearly"){
+      lag <- lag_yearly
+      
+    }
+    
+    
+    if(length(y)<(h+lag+1)){
+      next
+    }
+    
+    
+    trainData <- ts(data = y[1:(length(y) - h)], frequency = freq)
+    
+    
+    
+    
+    
+    
+    
+    if (freq_char == "Daily"){
+      X_daily <- rbind(X_daily, do.call("rbind", lapply(list(trainData), function(x) embed(x, lag_daily + 1))))
+      
+    }
+    if (freq_char == "Hourly"){
+      X_hourly <- rbind(X_hourly, do.call("rbind", lapply(list(trainData), function(x) embed(x, lag_hourly + 1))))
+      
+      
+    }
+    if (freq_char == "Weekly"){
+      X_weekly <- rbind(X_weekly, do.call("rbind", lapply(list(trainData), function(x) embed(x, lag_weekly + 1))))
+      
+    }
+    if (freq_char == "Monthly"){
+      X_monthly <- rbind(X_monthly, do.call("rbind", lapply(list(trainData), function(x) embed(x, lag_monthly + 1))))
+      
+    }
+    if (freq_char == "Quarterly"){
+      X_quarterly <- rbind(X_quarterly, do.call("rbind", lapply(list(trainData), function(x) embed(x, lag_quarterly + 1))))
+      
+    }
+    if (freq_char == "Yearly"){
+      
+      X_yearly <- rbind(X_yearly, do.call("rbind", lapply(list(trainData), function(x) embed(x, lag_yearly + 1))))
+      
+      
+    }
+    
+    
+}
+  
+
+
+# Daily
+Y_daily <- X_daily[, 1]
+X_daily <- X_daily[, -1]
+globalModel_daily <- lm(Y_daily ~ X_daily - 1)
+
+# Hourly
+Y_hourly <- X_hourly[, 1]
+X_hourly <- X_hourly[, -1]
+globalModel_hourly <- lm(Y_hourly ~ X_hourly - 1)
+
+# Monthly
+Y_monthly <- X_monthly[, 1]
+X_monthly <- X_monthly[, -1]
+globalModel_monthly <- lm(Y_monthly ~ X_monthly - 1)
+
+# Quarterly
+Y_quarterly <- X_quarterly[, 1]
+X_quarterly <- X_quarterly[, -1]
+globalModel_quarterly <- lm(Y_quarterly ~ X_quarterly - 1)
+
+# Weekly
+Y_weekly <- X_weekly[, 1]
+X_weekly <- X_weekly[, -1]
+globalModel_weekly <- lm(Y_weekly ~ X_weekly - 1)
+
+# Yearly
+Y_yearly <- X_yearly[, 1]
+X_yearly <- X_yearly[, -1]
+globalModel_yearly <- lm(Y_yearly ~ X_yearly - 1)
+
+  
+# Testing phase
+
+
+for (i in 1:600) {
+    
+    name <- paste("C:/Users/buckl/Desktop/trinity/Forecasting/train/train_", i, sep="")
+    name <- paste(name, ".csv", sep="")
+    y <- as.matrix(read.csv(name))
+    
+    freq_char = ts_freq[i]
+    
+    
+    h <- forecast_steps[[i]]
+    
+    
+    lag <- NULL
+    
+    
+    
+    if (freq_char == "Daily"){
+      lag <- lag_daily
+    }
+    if (freq_char == "Hourly"){
+      lag <- lag_hourly
+    }
+    if (freq_char == "Weekly"){
+      lag <-lag_weekly
+    }
+    if (freq_char == "Monthly"){
+      lag <- lag_monthly
+    }
+    if (freq_char == "Quarterly"){
+      lag <- lag_quarterly
+    }
+    if (freq_char == "Yearly"){
+      lag <- lag_yearly
+      
+    }
+    
+    
+    if(length(y)<(h+lag+1)){
+      next
+    }
+    
+    trainData <- ts(data = y[1:(length(y) - h)], frequency = 12)
+    testData <- as.matrix(y[(length(y) - (h-1)):length(y)])
+    
+    oldData <- rev(trainData[(length(trainData) - (lag - 1)) : length(trainData)])
+    
+    
+    
+    model <- NULL
+    
+    
+    
+    if (freq_char == "Daily"){
+      model <- globalModel_daily
+    }
+    if (freq_char == "Hourly"){
+      model <- globalModel_hourly
+    }
+    if (freq_char == "Weekly"){
+      model <-globalModel_weekly
+    }
+    if (freq_char == "Monthly"){
+      model <- globalModel_monthly
+    }
+    if (freq_char == "Quarterly"){
+      model <- globalModel_quarterly
+    }
+    if (freq_char == "Yearly"){
+      model <- globalModel_yearly
+      
+    }
+    
+    
+    
+    forecastedValues <- c()
+    for (k in 1:h) {
+      forecastedValue <- oldData %*% model$coefficients
+      #forecastedValue <- sum(oldData * globalModel$coefficients)
+      forecastedValues[k] <- forecastedValue
+      oldData <- c(forecastedValue, oldData[-lag])
+    }
+    
+    forecastedValues <- as.matrix(forecastedValues)
+    
+    
+    
+    AE <- abs(forecastedValues - testData)
+    
+    if (freq_char == "Daily" & lag < max_lag_daily) {
+      maes_for_lags_daily[index_daily] <- mean(AE)
+      index_daily <- index_daily + 1
+      
+    }
+    if (freq_char == "Hourly" & lag < max_lag_hourly) {
+      maes_for_lags_hourly[index_hourly] <- mean(AE)
+      index_hourly <- index_hourly + 1
+    }
+    if (freq_char == "Weekly" & lag < max_lag_weekly) {
+      maes_for_lags_weekly[index_weekly] <- mean(AE)
+      index_weekly <- index_weekly + 1
+    }
+    if (freq_char == "Monthly" & lag < max_lag_monthly) {
+      maes_for_lags_monthly[index_monthly] <- mean(AE)
+      index_monthly <- index_monthly + 1
+    }
+    if (freq_char == "Quarterly" & lag < max_lag_quarterly) {
+      maes_for_lags_quaterly[index_quarterly] <- mean(AE)
+      index_quarterly <- index_quarterly + 1
+    }
+    if (freq_char == "Yearly" & lag < max_lag_yearly) {
+      maes_for_lags_yearly[index_yearly] <- mean(AE)
+      index_yearly <- index_yearly + 1
+    }
+    
+    
+    
+    
+    
+}
+
+if(x<=max_lag_daily){
+maes_daily[x]<-mean(maes_for_lags_daily)
+}
+if(x<=max_lag_hourly){
+maes_hourly[x]<-mean(maes_for_lags_hourly)
+}
+if(x<=max_lag_monthly){
+maes_monthly[x]<- mean(maes_for_lags_monthly)
+}
+if(x<=max_lag_quarterly){
+maes_quaterly[x]<-mean(maes_for_lags_quaterly)
+}
+if(x<=max_lag_weekly){
+maes_weekly[x]<- mean(maes_for_lags_weekly)
+}
+if(x<=max_lag_yearly){
+maes_yearly[x] <- mean(maes_for_lags_yearly)
+}
+
+
+
+
+
+
+print(paste("Done iteration",x))
+}
+
+
+```
+
+```{r}
+plot(maes_daily ,type = "l", col = "blue", xlab = "Lag", ylab = "Mean Absolute Error", main = "MAE vs Lag for Daily Frequency")
+```
+
+```{r}
+plot(maes_hourly,type = "l", col = "blue", xlab = "Lag", ylab = "Mean Absolute Error", main = "MAE vs Lag for Hourly Frequency")
+```
+
+```{r}
+plot(maes_monthly,type = "l", col = "blue", xlab = "Lag", ylab = "Mean Absolute Error", main = "MAE vs Lag for Monthly Frequency")
+```
+
+```{r}
+plot(maes_quaterly,type = "l", col = "blue", xlab = "Lag", ylab = "Mean Absolute Error", main = "MAE vs Lag for Quarterly Frequency")
+```
+
+```{r}
+plot(maes_weekly,type = "l", col = "blue", xlab = "Lag", ylab = "Mean Absolute Error", main = "MAE vs Lag for Weekly Frequency")
+```
+
+```{r}
+plot(maes_yearly,type = "l", col = "blue", xlab = "Lag", ylab = "Mean Absolute Error", main = "MAE vs Lag for Yearly Frequency")
+```
+
+Now that I have tested out different lags for the global models. I pick one that minimuzes the MAE for each, and run the the tests for the last h observations of each series again. When I use the optimal lag from each graph, and use it for the lag values in part two, the MAE returned by kaggle is reduced from 587 down to 555, highlighting that the lags found from this section improve the accuracy of the global models. The length of the lag captures trends over that period of time. For example a lag of 3 in yearly frequency time series data, captures trends over a period of 3 years. 
+
+
+
+
+Part 4.
+First I find the three time series where global regression performed best, and the three time series where global regression performed worst. I use MAE to find these time series.
+
+```{r}
+
+
+
+
+
+
+
+#Residual analysis for time series where global regression had 3 lowest and 3 highest MAEs
+
+best <- which.min(MAEs)
+MAEs <- MAEs[-best]
+second_best <- which.min(MAEs)
+MAEs <- MAEs[-second_best]
+third_best <- which.min(MAEs)
+MAEs <- MAEs[-third_best]
+
+
+worst <- which.max(MAEs)
+MAEs <- MAEs[-worst]
+second_worst <- which.max(MAEs)
+MAEs <- MAEs[-second_worst]
+third_worst <- which.max(MAEs)
+MAEs <- MAEs[-third_worst]
+
+
+
+```
+
+
+
+
+```{r}
+# Function that will get the timeseries data for a particular time series from 1-600
+
+get_ts <- function(i){
+  name <- paste("C:/Users/buckl/Desktop/trinity/Forecasting/train/train_", i, sep="")
+    name <- paste(name, ".csv", sep="")
+    y <- as.matrix(read.csv(name))
+    
+    freq_char = ts_freq[i]
+    freq = get_ts_frequency(freq_char)
+    
+    time_series <- ts(y,freq = freq)
+    return(time_series)
+  
+}
+
+```
+
+Time series plot where global regression performed best based on MAE
+```{r}
+library(fpp2)
+
+ts_best <- get_ts(best)
+
+autoplot(ts_best) 
+
+```
+There is a long-term increasing trend in the time series
+
+
+
+
+
+```{r}
+ggseasonplot(ts_best)
+```
+We can see from this that there is not much seasonal trend.Values for a given year remain constant all year round. It is possible that the global model performed well on this time series given that the global model was trained on many time series, and picks up longer cycle trends better than shorter seasonal ones.
+
+
+```{r}
+ggAcf(ts_best)
+```
+
+From this autocorrelogram, we can see that the time series' values have a high correlation. When positive autocorrelation exists, high values tend to follow high values, and low values tend to follow low values.
+
+
+
+```{r}
+ts_second_best <- get_ts(second_best)
+autoplot(ts_second_best) 
+```
+
+```{r}
+ggseasonplot(ts_second_best)
+```
+
+```{r}
+ggAcf(ts_second_best)
+```
+
+
+
+```{r}
+ts_third_best <- get_ts(third_best)
+autoplot(ts_third_best) 
+```
+
+```{r}
+ggseasonplot(ts_third_best)
+```
+
+
+
+```{r}
+ggAcf(ts_third_best)
+```
+
+For all three time series that the global regression models performed best on, there was a positive long-term increasing trend in the data. For all three, there was not much seasonal trend. And for all three, the time series had a reasonable amount of autocorrelation. None of the these time series were cyclic.
+
+
+
+Now for the 3 time series that global regression performed worst on.
+
+```{r}
+ts_worst <- get_ts(worst)
+autoplot(ts_worst) + xlab("Month") + ylab("Value")
+```
+In this time series, where global regression performed worst, there is no long-term trend in the data. The data also has a cyclic component to it.
+
+
+
+
+```{r}
+ggseasonplot(ts_worst)
+```
+There is also no seasonal trend occuring in this data
+
+
+```{r}
+ggAcf(ts_worst)
+```
+And no autocorrelation
+
+```{r}
+ts_second_worst <- get_ts(second_worst)
+autoplot(ts_second_worst) 
+```
+This time-series had the second highest MAE with global regression. In contrast to the worst time series, there is a long-term trend in this data. The data also has a cyclic component to it, and lots of noise.
+
+
+```{r}
+ggseasonplot(ts_second_worst)
+```
+There is no seasonal component to the data
+
+```{r}
+ggAcf(ts_second_worst)
+```
+The data is autocorrelated, which explains the long term increasing trend in the data
+
+
+```{r}
+ts_third_worst <- get_ts(third_worst)
+
+autoplot(ts_third_worst) 
+```
+There is an overall long-term decreasing trend in this data
+
+```{r}
+
+ggseasonplot(ts_third_worst)
+```
+There is a seasonal component to this data
+
+```{r}
+ggAcf(ts_third_worst)
+```
+And the data has some autocorrelation.
+
+
+Overall, the three time series that global regression performed worst on have a few things in common. They do not have a very strong long-term trend, and they have a cyclic component to them. 
+It makes sense that global regression does not pick up on cyclic data and non-long term trends. Global models are trained once on all the data, so are more likely to fit parameters that tell the big picture of the data, such as long term trends, and big seasonal trends, but not irregularities such as cyclic data.
